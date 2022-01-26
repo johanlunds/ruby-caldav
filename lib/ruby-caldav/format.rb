@@ -1,8 +1,10 @@
+# frozen_string_literal: true
+
 module CalDAV
   module Format
     class Raw
-      def method_missing(m, *args, &block)
-        return *args
+      def method_missing(_m, *args)
+        args
       end
     end
 
@@ -11,43 +13,44 @@ module CalDAV
 
     class Pretty < Raw
       def parse_calendar(s)
-        result = ""
+        result = ''
         xml = REXML::Document.new(s)
 
-        REXML::XPath.each( xml, '//c:calendar-data/', {"c"=>"urn:ietf:params:xml:ns:caldav"} ){|c| result << c.text}
-        r = Icalendar.parse(result)
-        r
+        REXML::XPath.each(xml, '//c:calendar-data/', { 'c' => 'urn:ietf:params:xml:ns:caldav' }) do |c|
+          result << c.text
+        end
+        Icalendar.parse(result)
       end
 
-      def parse_todo( body )
+      def parse_todo(body)
         result = []
-        xml = REXML::Document.new( body )
-        REXML::XPath.each( xml, '//c:calendar-data/', { "c"=>"urn:ietf:params:xml:ns:caldav"} ){ |c|
+        xml = REXML::Document.new(body)
+        REXML::XPath.each(xml, '//c:calendar-data/', { 'c' => 'urn:ietf:params:xml:ns:caldav' }) do |c|
           p c.text
-          p parse_tasks( c.text )
-          result += parse_tasks( c.text )
-        }
-        return result
+          p parse_tasks(c.text)
+          result += parse_tasks(c.text)
+        end
+        result
       end
 
-      def parse_tasks( vcal )
-        return_tasks = Array.new
+      def parse_tasks(vcal)
+        return_tasks = []
         cals = Icalendar.parse(vcal)
-        cals.each { |tcal|
-          tcal.todos.each { |ttask|  # FIXME
+        cals.each do |tcal|
+          tcal.todos.each do |ttask| # FIXME
             return_tasks << ttask
-          }
-        }
-        return return_tasks
+          end
+        end
+        return_tasks
       end
 
-      def parse_events( vcal )
-        Icalendar.parse(vcal)        
+      def parse_events(vcal)
+        Icalendar.parse(vcal)
       end
 
-      def parse_single( body )
+      def parse_single(body)
         # FIXME: parse event/todo/vcard
-        parse_events( body )
+        parse_events(body)
       end
     end
   end

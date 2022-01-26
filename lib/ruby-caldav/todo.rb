@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Icalendar
   class Todo < Component
     ical_component :alarms
@@ -36,13 +38,12 @@ module Icalendar
     ical_multi_property :resources, :resource, :resources
     ical_multi_property :rdate, :recurrence_date, :recurrence_dates
     ical_multi_property :rrule, :recurrence_rule, :recurrence_rules
-    
-    def initialize()
-      super("VTODO")
+
+    def initialize
+      super('VTODO')
 
       sequence 0
       timestamp DateTime.now
     end
-
   end
 end

@@ -1,4 +1,4 @@
-
+# frozen_string_literal: true
 
 module Icalendar
   # A Event calendar component is a grouping of component
@@ -96,8 +96,8 @@ module Icalendar
     ical_multi_property :rdate, :recurrence_date, :recurrence_dates
     ical_multi_property :rrule, :recurrence_rule, :recurrence_rules
 
-    def initialize()
-      super("VEVENT")
+    def initialize
+      super('VEVENT')
 
       # Now doing some basic initialization
       sequence 0
@@ -106,7 +106,7 @@ module Icalendar
 
     def alarm(&block)
       a = Alarm.new
-      self.add a
+      add a
 
       a.instance_eval(&block) if block
 
@@ -116,6 +116,5 @@ module Icalendar
     def occurrences_starting(time)
       recurrence_rules.first.occurrences_of_event_starting(self, time)
     end
-
   end
 end

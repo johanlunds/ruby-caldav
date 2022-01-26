@@ -1,17 +1,17 @@
+# frozen_string_literal: true
+
 module CalDAV
   class Client
     include Icalendar
     attr_accessor :host, :port, :url, :user, :password, :ssl
 
-    def format=( fmt )
-      @format = fmt
-    end
+    attr_writer :format
 
     def with_retry(times = 3)
       counter = 1
       begin
         yield
-      rescue
+      rescue StandardError
         counter += 1
         retry if counter > times
       end
@@ -21,7 +21,7 @@ module CalDAV
       @format ||= Format::Debug.new
     end
 
-    def initialize( data )
+    def initialize(data)
       unless data[:proxy_uri].nil?
         proxy_uri   = URI(data[:proxy_uri])
         @proxy_host = proxy_uri.host
@@ -36,31 +36,32 @@ module CalDAV
       @password = data[:password]
       @ssl      = uri.scheme == 'https'
 
-      unless data[:authtype].nil?
-      	@authtype = data[:authtype]
-      	if @authtype == 'digest'
-
-      		@digest_auth = Net::HTTP::DigestAuth.new
-      		@duri = URI.parse data[:uri]
-      		@duri.user = @user
-      		@duri.password = @password
-
-      	elsif @authtype == 'basic'
-	    	  # this is fine for us
-	    else
-	    	raise "Please use basic or digest"
-	    end
+      if data[:authtype].nil?
+        @authtype = 'basic'
       else
-      	@authtype = 'basic'
+        @authtype = data[:authtype]
+        case @authtype
+        when 'digest'
+
+          @digest_auth = Net::HTTP::DigestAuth.new
+          @duri = URI.parse data[:uri]
+          @duri.user = @user
+          @duri.password = @password
+
+        when 'basic'
+        # this is fine for us
+        else
+          raise 'Please use basic or digest'
+        end
       end
     end
 
     def __create_http
-      if @proxy_uri.nil?
-        http = Net::HTTP.new(@host, @port)
-      else
-        http = Net::HTTP.new(@host, @port, @proxy_host, @proxy_port)
-      end
+      http = if @proxy_uri.nil?
+               Net::HTTP.new(@host, @port)
+             else
+               Net::HTTP.new(@host, @port, @proxy_host, @proxy_port)
+             end
       if @ssl
         http.use_ssl = @ssl
         http.verify_mode = OpenSSL::SSL::VERIFY_NONE
@@ -69,109 +70,107 @@ module CalDAV
       http
     end
 
-    def find_events data
-      result = ""
+    def find_events(data)
+      result = ''
       events = []
       res = nil
-      __create_http.start {|http|
+      __create_http.start do |http|
+        req = Net::HTTP::Report.new(@url, initheader = { 'Content-Type' => 'application/xml' })
 
-        req = Net::HTTP::Report.new(@url, initheader = {'Content-Type'=>'application/xml'} )
-
-		if not @authtype == 'digest'
-			req.basic_auth @user, @password
-		else
-			req.add_field 'Authorization', digestauth('REPORT')
-		end
-		    if data[:start].is_a? Integer
-          req.body = CalDAV::Request::ReportVEVENT.new(Time.at(data[:start]).utc.strftime("%Y%m%dT%H%M%S"),
-                                                        Time.at(data[:end]).utc.strftime("%Y%m%dT%H%M%S") ).to_xml
+        if @authtype != 'digest'
+          req.basic_auth @user, @password
         else
-          req.body = CalDAV::Request::ReportVEVENT.new(Time.parse(data[:start]).utc.strftime("%Y%m%dT%H%M%S"),
-                                                        Time.parse(data[:end]).utc.strftime("%Y%m%dT%H%M%S") ).to_xml
+          req.add_field 'Authorization', digestauth('REPORT')
+        end
+        if data[:start].is_a? Integer
+          req.body = CalDAV::Request::ReportVEVENT.new(Time.at(data[:start]).utc.strftime('%Y%m%dT%H%M%S'),
+                                                       Time.at(data[:end]).utc.strftime('%Y%m%dT%H%M%S')).to_xml
+        else
+          req.body = CalDAV::Request::ReportVEVENT.new(Time.parse(data[:start]).utc.strftime('%Y%m%dT%H%M%S'),
+                                                       Time.parse(data[:end]).utc.strftime('%Y%m%dT%H%M%S')).to_xml
         end
         res = http.request(req)
-      }
-        errorhandling res
-        result = ""
-        #puts res.body
-        xml = REXML::Document.new(res.body)
-        REXML::XPath.each( xml, '//c:calendar-data/', {"c"=>"urn:ietf:params:xml:ns:caldav"} ){|c| result << c.text}
-        r = Icalendar.parse(result)
-        unless r.empty?
-          r.each do |calendar|
-            calendar.events.each do |event|
-              events << event
-            end
+      end
+      errorhandling res
+      result = ''
+      # puts res.body
+      xml = REXML::Document.new(res.body)
+      REXML::XPath.each(xml, '//c:calendar-data/', { 'c' => 'urn:ietf:params:xml:ns:caldav' }) { |c| result << c.text }
+      r = Icalendar.parse(result)
+      if r.empty?
+        false
+      else
+        r.each do |calendar|
+          calendar.events.each do |event|
+            events << event
           end
-          events
-        else
-          return false
         end
+        events
+      end
     end
 
-    def find_event uuid
+    def find_event(uuid)
       with_retry do
         res = nil
-        __create_http.start {|http|
+        __create_http.start do |http|
           req = Net::HTTP::Get.new("#{@url}/#{uuid}.ics")
-          if not @authtype == 'digest'
-          	req.basic_auth @user, @password
+          if @authtype != 'digest'
+            req.basic_auth @user, @password
           else
-          	req.add_field 'Authorization', digestauth('GET')
+            req.add_field 'Authorization', digestauth('GET')
           end
-          res = http.request( req )
-        }
+          res = http.request(req)
+        end
         errorhandling res
       end
       begin
-      	r = Icalendar.parse(res.body)
-      rescue
-      	return false
+        r = Icalendar.parse(res.body)
+      rescue StandardError
+        false
       else
-      	r.first.events.first
+        r.first.events.first
       end
-
-
     end
 
-    def delete_event uuid
+    def delete_event(uuid)
       with_retry do
         res = nil
-        __create_http.start {|http|
+        __create_http.start do |http|
           req = Net::HTTP::Delete.new("#{@url}/#{uuid}.ics")
-          if not @authtype == 'digest'
-          	req.basic_auth @user, @password
+          if @authtype != 'digest'
+            req.basic_auth @user, @password
           else
-          	req.add_field 'Authorization', digestauth('DELETE')
+            req.add_field 'Authorization', digestauth('DELETE')
           end
-          res = http.request( req )
-        }
+          res = http.request(req)
+        end
         errorhandling res
       end
       # accept any success code
-      if res.code.to_i.between?(200,299)
-        return true
+      if res.code.to_i.between?(200, 299)
+        true
       else
-        return false
+        false
       end
     end
 
-    def create_event event
+    def create_event(event)
       c = Calendar.new
       c.events = []
       uuid = UUID.new.generate
       raise DuplicateError if entry_with_uuid_exists?(uuid)
+
       c.event do
         uid           uuid
         dtstart       DateTime.parse(event[:start])
         dtend         DateTime.parse(event[:end])
-        categories    event[:categories]# Array
+        categories    event[:categories] # Array
         contacts      event[:contacts] # Array
-        attendees     event[:attendees]# Array
+        attendees     event[:attendees] # Array
         duration      event[:duration]
         summary       event[:title]
         description   event[:description]
-        klass         event[:accessibility] #PUBLIC, PRIVATE, CONFIDENTIAL
+        klass         event[:accessibility] # PUBLIC, PRIVATE, CONFIDENTIAL
         location      event[:location]
         geo_location  event[:geo_location]
         status        event[:status]
@@ -181,66 +180,61 @@ module CalDAV
       cstring = c.to_ical
       with_retry do
         res = nil
-        __create_http.start { |http|
+        __create_http.start do |http|
           req = Net::HTTP::Put.new("#{@url}/#{uuid}.ics")
           req['Content-Type'] = 'text/calendar'
-          if not @authtype == 'digest'
-          	req.basic_auth @user, @password
+          if @authtype != 'digest'
+            req.basic_auth @user, @password
           else
-          	req.add_field 'Authorization', digestauth('PUT')
+            req.add_field 'Authorization', digestauth('PUT')
           end
           req.body = cstring
-          res = http.request( req )
-        }
+          res = http.request(req)
+        end
         errorhandling res
       end
       find_event uuid
     end
 
-    def update_event event
-      #TODO... fix me
+    def update_event(event)
+      # TODO... fix me
       if delete_event event[:uid]
         create_event event
       else
-        return false
+        false
       end
     end
 
-    def add_alarm tevent, altCal="Calendar"
+    def add_alarm(tevent, altCal = 'Calendar'); end
 
-    end
-
-    def find_todo uuid
+    def find_todo(uuid)
       res = nil
-      __create_http.start {|http|
+      __create_http.start do |http|
         req = Net::HTTP::Get.new("#{@url}/#{uuid}.ics")
-        if not @authtype == 'digest'
-        	req.basic_auth @user, @password
+        if @authtype != 'digest'
+          req.basic_auth @user, @password
         else
-        	req.add_field 'Authorization', digestauth('GET')
+          req.add_field 'Authorization', digestauth('GET')
         end
-        res = http.request( req )
-      }
+        res = http.request(req)
+      end
       errorhandling res
       r = Icalendar.parse(res.body)
       r.first.todos.first
     end
 
-
-
-
-
-    def create_todo todo
+    def create_todo(todo)
       c = Calendar.new
       uuid = UUID.new.generate
       raise DuplicateError if entry_with_uuid_exists?(uuid)
+
       c.todo do
         uid           uuid
         start         DateTime.parse(todo[:start])
         duration      todo[:duration]
         summary       todo[:title]
         description   todo[:description]
-        klass         todo[:accessibility] #PUBLIC, PRIVATE, CONFIDENTIAL
+        klass         todo[:accessibility] # PUBLIC, PRIVATE, CONFIDENTIAL
         location      todo[:location]
         percent       todo[:percent]
         priority      todo[:priority]
@@ -252,17 +246,17 @@ module CalDAV
       c.todo.uid = uuid
       cstring = c.to_ical
       res = nil
-      __create_http.start { |http|
+      __create_http.start do |http|
         req = Net::HTTP::Put.new("#{@url}/#{uuid}.ics")
         req['Content-Type'] = 'text/calendar'
-        if not @authtype == 'digest'
-        	req.basic_auth @user, @password
+        if @authtype != 'digest'
+          req.basic_auth @user, @password
         else
-        	req.add_field 'Authorization', digestauth('PUT')
+          req.add_field 'Authorization', digestauth('PUT')
         end
         req.body = cstring
-        res = http.request( req )
-      }
+        res = http.request(req)
+      end
       errorhandling res
       find_todo uuid
     end
@@ -271,63 +265,60 @@ module CalDAV
       res = nil
       raise DuplicateError if entry_with_uuid_exists?(uuid)
 
-      __create_http.start {|http|
-        req = Net::HTTP::Report.new(@url, initheader = {'Content-Type'=>'application/xml'} )
-        if not @authtype == 'digest'
-        	req.basic_auth @user, @password
+      __create_http.start do |http|
+        req = Net::HTTP::Report.new(@url, initheader = { 'Content-Type' => 'application/xml' })
+        if @authtype != 'digest'
+          req.basic_auth @user, @password
         else
-        	req.add_field 'Authorization', digestauth('REPORT')
+          req.add_field 'Authorization', digestauth('REPORT')
         end
         req.body = CalDAV::Request::ReportVTODO.new.to_xml
-        res = http.request( req )
-      }
+        res = http.request(req)
+      end
       errorhandling res
-      format.parse_todo( res.body )
+      format.parse_todo(res.body)
     end
 
     private
 
-    def digestauth method
+    def digestauth(method)
+      h = Net::HTTP.new @duri.host, @duri.port
+      if @ssl
+        h.use_ssl = @ssl
+        h.verify_mode = OpenSSL::SSL::VERIFY_NONE
+      end
+      req = Net::HTTP::Get.new @duri.request_uri
 
-	    h = Net::HTTP.new @duri.host, @duri.port
-	    if @ssl
-	    	h.use_ssl = @ssl
-	    	h.verify_mode = OpenSSL::SSL::VERIFY_NONE
-	    end
-	    req = Net::HTTP::Get.new @duri.request_uri
+      res = h.request req
+      # res is a 401 response with a WWW-Authenticate header
 
-	    res = h.request req
-	    # res is a 401 response with a WWW-Authenticate header
-
-	    auth = @digest_auth.auth_header @duri, res['www-authenticate'], method
-
-    	return auth
+      @digest_auth.auth_header @duri, res['www-authenticate'], method
     end
 
-    def entry_with_uuid_exists? uuid
+    def entry_with_uuid_exists?(uuid)
       res = nil
 
-      __create_http.start {|http|
+      __create_http.start do |http|
         req = Net::HTTP::Get.new("#{@url}/#{uuid}.ics")
-        if not @authtype == 'digest'
-        	req.basic_auth @user, @password
+        if @authtype != 'digest'
+          req.basic_auth @user, @password
         else
-        	req.add_field 'Authorization', digestauth('GET')
+          req.add_field 'Authorization', digestauth('GET')
         end
 
-        res = http.request( req )
-
-      }
+        res = http.request(req)
+      end
       begin
         errorhandling res
-      	Icalendar.parse(res.body)
-      rescue
-      	return false
+        Icalendar.parse(res.body)
+      rescue StandardError
+        false
       else
-      	return true
+        true
       end
     end
-    def  errorhandling response
+
+    def errorhandling(response)
       raise NotExistError if response.code.to_i == 404
       raise AuthenticationError if response.code.to_i == 401
       raise NotExistError if response.code.to_i == 410
@@ -335,9 +326,9 @@ module CalDAV
     end
   end
 
-
   class CalDAVError < StandardError
   end
+
   class AuthenticationError < CalDAVError; end
   class DuplicateError      < CalDAVError; end
   class APIError            < CalDAVError; end
