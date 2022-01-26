@@ -3,7 +3,7 @@
 module CalDAV
   module Format
     class Raw
-      def method_missing(_m, *args)
+      def method_missing(_, *args)
         args
       end
     end

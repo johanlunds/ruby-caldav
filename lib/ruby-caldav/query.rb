@@ -2,7 +2,7 @@
 
 module CalDAV
   class Query
-    attr_accessor :child
+    attr_reader :child
 
     # TODO: raise error if to_xml is called before child is assigned
     def to_xml(xml = Builder::XmlMarkup.new(indent: 2))

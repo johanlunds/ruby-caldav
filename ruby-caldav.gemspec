@@ -24,10 +24,6 @@ Gem::Specification.new do |s|
   s.add_development_dependency 'fakeweb', '~> 1.x'
   s.add_development_dependency 'rspec', '~> 2.x'
 
-  s.description = <<-DESC
-  Ruby client for searching, creating, editing CalDAV calendars and tasks.
-  DESC
-
   s.files         = `git ls-files`.split("\n")
   s.require_paths = ['lib']
 end

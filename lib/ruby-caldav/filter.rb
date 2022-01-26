@@ -3,7 +3,8 @@
 module CalDAV
   module Filter
     class Base
-      attr_accessor :parent, :child
+      attr_reader :child
+      attr_accessor :parent
 
       def to_xml(xml = Builder::XmlMarkup.new(indent: 2))
         if parent

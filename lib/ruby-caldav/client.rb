@@ -75,7 +75,7 @@ module CalDAV
       events = []
       res = nil
       __create_http.start do |http|
-        req = Net::HTTP::Report.new(@url, initheader = { 'Content-Type' => 'application/xml' })
+        req = Net::HTTP::Report.new(@url, { 'Content-Type' => 'application/xml' })
 
         if @authtype != 'digest'
           req.basic_auth @user, @password
@@ -205,7 +205,7 @@ module CalDAV
       end
     end
 
-    def add_alarm(tevent, altCal = 'Calendar'); end
+    def add_alarm(tevent, alt_cal = 'Calendar'); end
 
     def find_todo(uuid)
       res = nil
@@ -223,6 +223,7 @@ module CalDAV
       r.first.todos.first
     end
 
+    # FIXME: Lint/DuplicateMethods: Method CalDAV::Client#create_todo is defined at both lib/ruby-caldav/client.rb:226 and lib/ruby-caldav/client.rb:264
     def create_todo(todo)
       c = Calendar.new
       uuid = UUID.new.generate
@@ -261,12 +262,13 @@ module CalDAV
       find_todo uuid
     end
 
+    # FIXME: Lint/DuplicateMethods: Method CalDAV::Client#create_todo is defined at both lib/ruby-caldav/client.rb:226 and lib/ruby-caldav/client.rb:264
     def create_todo
       res = nil
       raise DuplicateError if entry_with_uuid_exists?(uuid)
 
       __create_http.start do |http|
-        req = Net::HTTP::Report.new(@url, initheader = { 'Content-Type' => 'application/xml' })
+        req = Net::HTTP::Report.new(@url, { 'Content-Type' => 'application/xml' })
         if @authtype != 'digest'
           req.basic_auth @user, @password
         else
