@@ -77,7 +77,7 @@ module CalDAV
       events = []
       res = nil
       __create_http.start do |http|
-        req = Net::HTTP::Report.new(@url, { 'Content-Type' => 'application/xml' })
+        req = Net::HTTP::Report.new(@url, { 'Content-Type' => 'application/xml', 'Depth' => '1' })
 
         if @authtype != 'digest'
           req.basic_auth @user, @password
@@ -94,7 +94,7 @@ module CalDAV
         res = http.request(req)
       end
       errorhandling res
-      result = ''
+      result = String.new
       # puts res.body
       xml = REXML::Document.new(res.body)
       REXML::XPath.each(xml, '//c:calendar-data/', { 'c' => 'urn:ietf:params:xml:ns:caldav' }) { |c| result << c.text }
