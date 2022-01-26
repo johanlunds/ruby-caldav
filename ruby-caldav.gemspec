@@ -19,6 +19,7 @@ Gem::Specification.new do |s|
   s.add_dependency 'uuid', '~> 2.x'
   s.add_dependency 'net-http-digest_auth', '~> 1.x'
   s.add_dependency 'builder', '~> 3.x'
+  s.add_dependency 'rexml'
   s.add_development_dependency 'rspec', '~> 2.x'
   s.add_development_dependency 'fakeweb', '~> 1.x'
 
