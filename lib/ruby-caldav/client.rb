@@ -35,6 +35,7 @@ module CalDAV
       @user     = data[:user]
       @password = data[:password]
       @ssl      = uri.scheme == 'https'
+      @debug    = data[:debug]
 
       if data[:authtype].nil?
         @authtype = 'basic'
@@ -67,6 +68,7 @@ module CalDAV
         http.verify_mode = OpenSSL::SSL::VERIFY_NONE
       end
       http.max_retries = 3
+      http.set_debug_output $stderr if @debug
       http
     end
 
