@@ -100,7 +100,7 @@ module CalDAV
       REXML::XPath.each(xml, '//c:calendar-data/', { 'c' => 'urn:ietf:params:xml:ns:caldav' }) { |c| result << c.text }
       r = Icalendar.parse(result)
       if r.empty?
-        false
+        []
       else
         r.each do |calendar|
           calendar.events.each do |event|
